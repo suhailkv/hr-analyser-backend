@@ -1,6 +1,6 @@
 require('dotenv').config();
 const express = require('express');
-const bodyParser = require('body-parser');
+const cors = require('cors');
 const sequelize = require('./config/database');
 const db = require('./models'); // loads models & associations
 
@@ -8,21 +8,31 @@ const adminRoutes = require('./routes/adminRoutes');
 const userRoutes = require('./routes/userRoutes');
 
 const app = express();
-app.use(bodyParser.json({ limit: '2mb' }));
-app.use(bodyParser.urlencoded({ extended: true }));
 
+// ✅ Enable CORS
+app.use(cors({
+  origin: process.env.CORS_ORIGIN || '*',
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+}));
+
+// ✅ Built-in JSON & URL-encoded body parsers
+app.use(express.json({ limit: '2mb' }));
+app.use(express.urlencoded({ extended: true }));
+
+// ✅ Root endpoint
 app.get('/', (req, res) => res.json({ message: 'HR Analyzer API' }));
 
+// ✅ Mount routes
 app.use('/admin', adminRoutes);
 app.use('/user', userRoutes);
 
-// Test DB connection and sync model definitions (no migrations, won't alter existing tables if they match)
+// ✅ Database connection
 (async () => {
   try {
     await sequelize.authenticate();
     console.log('Database connected.');
-    // Note: we are not calling sequelize.sync({ force: true }) to avoid altering DB in production.
-    // But we can sync models in development if needed:
+
     if (process.env.NODE_ENV === 'development') {
       await sequelize.sync({ alter: true });
       console.log('Models synced (alter).');
