@@ -16,7 +16,11 @@ const sequelize = db.sequelize;
  */
 const startSession = async (req, res) => {
   try {
-    const { ip_address, user_agent } = req.body || {};
+    const { ip_address , user_agent , 
+
+      fullName,
+      email, phone,company
+    } = req.body || {};
     const session_uuid = uuidv4();
     const resp = await Response.create({ session_uuid, ip_address, user_agent });
     return res.status(201).json({ session_uuid });
