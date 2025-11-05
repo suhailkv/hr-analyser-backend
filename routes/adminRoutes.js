@@ -28,7 +28,7 @@ const requireAdmin = (req, res, next) => {
 
 // Sections
 router.post('/sections', requireAdmin, sectionController.create);
-router.get('/sections', requireAdmin, sectionController.list);
+router.get('/sections', sectionController.list);
 router.get('/sections/:id', requireAdmin, sectionController.getOne);
 router.put('/sections/:id', requireAdmin, sectionController.update);
 router.delete('/sections/:id', requireAdmin, sectionController.remove);
