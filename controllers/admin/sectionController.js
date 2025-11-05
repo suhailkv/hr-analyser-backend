@@ -15,15 +15,35 @@ const create = async (req, res) => {
   }
 };
 
+const { Sequelize } = require('sequelize');
+
 const list = async (req, res) => {
   try {
-    const sections = await Section.findAll({ order: [['sort_order', 'ASC'], ['id', 'ASC']] });
+    const sections = await Section.findAll({
+      attributes: [
+        ['id', 'id'],
+        ['title', 'section_name'],
+        // 👇 Add COUNT of questions as question_count
+        [Sequelize.fn('COUNT', Sequelize.col('questions.id')), 'questionCount']
+      ],
+      include: [
+        {
+          model: db.Question,
+          attributes: [], // don't include actual question data, just count
+          required: false
+        }
+      ],
+      group: ['Section.id'], // ensure proper grouping for aggregation
+      order: [['sort_order', 'ASC'], ['id', 'ASC']]
+    });
+
     return res.json(sections);
   } catch (err) {
-    console.error(err);
+    console.error('Error fetching sections with question count:', err);
     return res.status(500).json({ message: 'server error' });
   }
 };
+
 
 const getOne = async (req, res) => {
   try {
