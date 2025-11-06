@@ -22,7 +22,7 @@ app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ extended: true }));
 
 // ✅ Root endpoint
-app.get('/', (req, res) => res.json({ message: 'HR Analyzer API' }));
+app.get('/health', (req, res) => res.json({ message: 'HR Analyzer API' }));
 
 // ✅ Mount routes
 app.use('/admin', adminRoutes);
