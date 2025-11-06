@@ -16,7 +16,7 @@ const sequelize = db.sequelize;
  */
 const startSession = async (req, res) => {
   try {
-    const { ip_address , user_agent , 
+    const { ip_address  , user_agent , 
 
       fullName,
       email, phone,company
@@ -42,35 +42,33 @@ const submitAnswers = async (req, res) => {
   const t = await sequelize.transaction();
   try {
     const { session_uuid } = req.params;
-    const { answers } = req.body; // array of { question_id, option_id }
+    const { answers, company = 'Acme Corp', contact = 'john@acme.com' } = req.body;
+
     if (!Array.isArray(answers) || answers.length === 0) {
       await t.rollback();
       return res.status(400).json({ message: 'answers required' });
     }
 
-    const resp = await Response.findOne({ where: { session_uuid }, transaction: t });
+    let resp = await Response.findOne({ where: { session_uuid }, transaction: t });
     if (!resp) {
       await t.rollback();
       return res.status(404).json({ message: 'session not found' });
     }
 
-    // For each answer, validate question and option, then insert Answer snapshot
-    // We will upsert Answers per (response_id, question_id) to respect UNIQUE constraint
+    // ✅ Process answers
     for (const a of answers) {
       const { question_id, option_id } = a;
       if (!question_id || !option_id) {
         await t.rollback();
-        return res.status(400).json({ message: 'question_id and option_id required for each answer' });
+        return res.status(400).json({ message: 'question_id and option_id required' });
       }
 
-      // fetch option (and confirm belongs to question)
       const option = await Option.findByPk(option_id, { transaction: t });
       if (!option || String(option.question_id) !== String(question_id)) {
         await t.rollback();
         return res.status(400).json({ message: `invalid option ${option_id} for question ${question_id}` });
       }
 
-      // upsert answer
       const answerPayload = {
         response_id: resp.id,
         question_id,
@@ -82,8 +80,10 @@ const submitAnswers = async (req, res) => {
         answered_at: new Date()
       };
 
-      // Try update existing, otherwise create
-      const existing = await Answer.findOne({ where: { response_id: resp.id, question_id }, transaction: t });
+      const existing = await Answer.findOne({
+        where: { response_id: resp.id, question_id },
+        transaction: t
+      });
       if (existing) {
         await existing.update(answerPayload, { transaction: t });
       } else {
@@ -91,8 +91,7 @@ const submitAnswers = async (req, res) => {
       }
     }
 
-    // After all answers saved, compute section-wise totals
-    // Query answers joined to questions -> group by section_id
+    // ✅ Compute section totals
     const sectionTotals = await Answer.findAll({
       attributes: [
         [Sequelize.col('question.section_id'), 'section_id'],
@@ -100,68 +99,136 @@ const submitAnswers = async (req, res) => {
         [Sequelize.fn('SUM', Sequelize.col('option_score_snapshot')), 'section_score']
       ],
       where: { response_id: resp.id },
-      include: [
-        {
-          model: Question,
-          attributes: [],
-          required: true
-        }
-      ],
+      include: [{ model: Question, attributes: [], required: true }],
       group: ['question.section_id'],
       transaction: t,
       raw: true
     });
 
-    // Upsert into cache table per section
+    // ✅ Cache per section
     for (const s of sectionTotals) {
       const section_id = s.section_id;
       const total_score = parseInt(s.section_score || 0, 10);
       const questions_answered = parseInt(s.questions_answered || 0, 10);
 
-      // upsert: try find existing
-      const existingCache = await SectionScoreCache.findOne({ where: { response_id: resp.id, section_id }, transaction: t });
+      const existingCache = await SectionScoreCache.findOne({
+        where: { response_id: resp.id, section_id },
+        transaction: t
+      });
       if (existingCache) {
-        await existingCache.update({ total_score, questions_answered, last_calculated_at: new Date() }, { transaction: t });
+        await existingCache.update(
+          { total_score, questions_answered, last_calculated_at: new Date() },
+          { transaction: t }
+        );
       } else {
-        await SectionScoreCache.create({ response_id: resp.id, section_id, total_score, questions_answered, last_calculated_at: new Date() }, { transaction: t });
+        await SectionScoreCache.create(
+          { response_id: resp.id, section_id, total_score, questions_answered },
+          { transaction: t }
+        );
       }
     }
 
-    // Mark response completed_at
     await resp.update({ completed_at: new Date() }, { transaction: t });
-
     await t.commit();
 
-    // Build final totals response
-    const sections = await Section.findAll({ order: [['sort_order', 'ASC'], ['id', 'ASC']] });
-    // join with cache to produce a summary
-    const cacheRows = await SectionScoreCache.findAll({ where: { response_id: resp.id }, transaction: null, raw: true });
-    const sectionSummary = sections.map(s => {
-      const cached = cacheRows.find(r => String(r.section_id) === String(s.id));
+    // ✅ Build report output
+    const sections = await Section.findAll({
+      order: [['sort_order', 'ASC'], ['id', 'ASC']]
+    });
+    const cacheRows = await SectionScoreCache.findAll({
+      where: { response_id: resp.id },
+      raw: true
+    });
+
+    // Section summaries
+    const sectionSummary = sections.map((s) => {
+      const cached = cacheRows.find((r) => String(r.section_id) === String(s.id));
+      const score = cached ? cached.total_score : 0;
+      const maxScore = cached ? cached.questions_answered * 5 : 0; // assume max option score 5
       return {
         section_id: s.id,
         section_title: s.title,
-        questions_answered: cached ? cached.questions_answered : 0,
-        section_score: cached ? cached.total_score : 0
+        score,
+        maxScore
       };
     });
 
-    const final_total = sectionSummary.reduce((sum, x) => sum + (x.section_score || 0), 0);
-    const total_questions = sectionSummary.reduce((sum, x) => sum + (x.questions_answered || 0), 0);
+    // Totals
+    const totalScore = sectionSummary.reduce((sum, s) => sum + s.score, 0);
+    const maxScore = sectionSummary.reduce((sum, s) => sum + s.maxScore, 0);
+    const percent = maxScore > 0 ? Math.round((totalScore / maxScore) * 100) : 0;
 
-    return res.json({
-      session_uuid: resp.session_uuid,
-      response_id: resp.id,
-      section_summary: sectionSummary,
-      total_score: final_total,
-      total_questions
-    });
+    // Summary classification
+    let summaryStatus = 'Excellent Performance';
+    let summaryType = 'success';
+    if (percent < 40) {
+      summaryStatus = 'Immediate Attention Required';
+      summaryType = 'danger';
+    } else if (percent < 70) {
+      summaryStatus = 'Needs Improvement';
+      summaryType = 'warning';
+    }
 
+    // Insights (top/bottom 1 sections)
+    const sorted = [...sectionSummary].sort((a, b) => b.score - a.score);
+    const top = sorted[0];
+    const bottom = sorted[sorted.length - 1];
+    const keyInsights = [
+      {
+        name: `Strong Area: ${top.section_title}`,
+        status: 'success'
+      },
+      {
+        name: `Weak Area: ${bottom.section_title}`,
+        status: 'danger'
+      }
+    ];
+
+    // Build section details (simplified)
+    const summaryDetails = sectionSummary.map((s) => ({
+      name: s.section_title,
+      score: s.score,
+      maxScore: s.maxScore,
+      completionRate:
+        s.maxScore > 0 ? `${Math.round((s.score / s.maxScore) * 100)}%` : '0%',
+      strengths: ['Strong team participation', 'Good process adherence'],
+      gaps: ['Inconsistent follow-up', 'Lack of automation'],
+      recommendations: [
+        'Improve process automation',
+        'Enhance documentation and periodic reviews'
+      ]
+    }));
+
+    // ✅ Final response payload
+    const report = {
+      id: `RPT-${String(resp.id).padStart(3, '0')}`,
+      company,
+      submitted: new Date().toISOString().split('T')[0],
+      contact,
+      score: percent,
+      status: 'Completed',
+      details: {
+        overAllScore: totalScore,
+        maxmScore: maxScore,
+        summaryStatus,
+        summaryType,
+        sectionRatings: sectionSummary.map((s) => ({
+          sectionName: s.section_title,
+          score: s.score,
+          mxmScore: s.maxScore
+        })),
+        keyInsights,
+        summary: summaryDetails
+      }
+    };
+
+    return res.json(report);
   } catch (err) {
-    console.error(err);
+    console.error('Submit Answers Error:', err);
     await t.rollback();
     return res.status(500).json({ message: 'server error' });
   }
 };
+
 
 module.exports = { startSession, submitAnswers };
