@@ -4,6 +4,7 @@ const authController = require('../controllers/authController');
 const sectionController = require('../controllers/admin/sectionController');
 const questionController = require('../controllers/admin/questionController');
 const optionController = require('../controllers/admin/optionController');
+const scoreController = require('../controllers/user/scoreController');
 const jwt = require('jsonwebtoken');
 
 // Public admin auth endpoints
@@ -46,5 +47,8 @@ router.get('/options', requireAdmin, optionController.list);
 router.get('/options/:id', requireAdmin, optionController.getOne);
 router.put('/options/:id', requireAdmin, optionController.update);
 router.delete('/options/:id', requireAdmin, optionController.remove);
+
+// admin submissions
+router.get('/submissions', requireAdmin, scoreController.getAllSubmissions);
 
 module.exports = router;
