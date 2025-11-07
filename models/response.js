@@ -8,6 +8,10 @@ module.exports = (sequelize) => {
       primaryKey: true
     },
     session_uuid: { type: DataTypes.CHAR(36), allowNull: false, unique: true },
+    full_name: { type: DataTypes.STRING, allowNull: true },
+    email : { type: DataTypes.STRING, allowNull: true },
+    company: { type: DataTypes.STRING, allowNull: true },
+    contact: { type: DataTypes.STRING, allowNull: true },
     ip_address: { type: DataTypes.STRING(45), allowNull: true },
     user_agent: { type: DataTypes.TEXT, allowNull: true },
     started_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
