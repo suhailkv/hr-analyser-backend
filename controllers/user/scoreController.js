@@ -245,9 +245,138 @@ const getAllSubmissions = async (req, res) => {
     return res.status(500).json({ message: 'Server error', error: err.message });
   }
 };
+// controllers/summaryController.js
+
+// const { sequelize, Sequelize, Response, Section, SectionScoreCache, Answer, Question, Option } = require('../models');
+
+// controllers/summaryController.js
+
+// const { sequelize, Sequelize, Response, Section, SectionScoreCache, Answer, Question } = require('../models');
+
+const updateSummaryFromReport = async (req, res) => {
+  const t = await sequelize.transaction();
+  try {
+    const { session_uuid } = req.params;
+    const report = req.body;
+
+    if (!report || !report.details) {
+      await t.rollback();
+      return res.status(400).json({ message: 'Invalid payload format. Expected report.details.' });
+    }
+
+    // 1️⃣ Extract top-level fields
+    const company = report.company || null;
+    const contact = report.contact || null;
+
+    // Find response
+    const resp = await Response.findOne({ where: { session_uuid }, transaction: t });
+    if (!resp) {
+      await t.rollback();
+      return res.status(404).json({ message: 'Response not found' });
+    }
+
+    // Update basic fields
+    await resp.update({ company, contact }, { transaction: t });
+
+    // 2️⃣ Extract section ratings
+    const sectionRatings = report.details.sectionRatings || [];
+    const summaryDetails = report.details.summary || [];
+
+    if (!Array.isArray(sectionRatings) || !Array.isArray(summaryDetails)) {
+      await t.rollback();
+      return res.status(400).json({ message: 'Invalid sectionRatings or summary arrays.' });
+    }
+
+    // Load section mapping
+    const sections = await Section.findAll({ attributes: ['id', 'title'], raw: true, transaction: t });
+    const sectionMap = {};
+    sections.forEach(s => { sectionMap[s.title] = s.id; });
+
+    // 3️⃣ Replace SectionScoreCache
+    await SectionScoreCache.destroy({ where: { response_id: resp.id }, transaction: t });
+
+    // Deduplicate by section_id (keep the last occurrence)
+const sectionCacheMap = {};
+for (const s of sectionRatings) {
+  const sectionId = sectionMap[s.sectionName];
+  if (!sectionId) continue;
+  const totalScore = parseInt(s.score || 0, 10);
+  const maxScore = parseInt(s.mxmScore || 0, 10);
+  if (totalScore > maxScore) {
+    await t.rollback();
+    return res.status(400).json({
+      message: `Section "${s.sectionName}" score exceeds max (${totalScore}/${maxScore})`
+    });
+  }
+  // overwrite existing if duplicated
+  sectionCacheMap[sectionId] = {
+    response_id: resp.id,
+    section_id: sectionId,
+    total_score: totalScore,
+    questions_answered: 0,
+    last_calculated_at: new Date()
+  };
+}
+const sectionCacheInserts = Object.values(sectionCacheMap);
+if (sectionCacheInserts.length) {
+  await SectionScoreCache.bulkCreate(sectionCacheInserts, { transaction: t });
+}
+
+
+    // 4️⃣ Replace Answers
+    await Answer.destroy({ where: { response_id: resp.id }, transaction: t });
+
+    const answerInserts = [];
+    for (const s of summaryDetails) {
+      const sectionId = sectionMap[s.name];
+      if (!sectionId) continue;
+
+      const sectionScore = parseInt(s.score || 0, 10);
+      const maxScore = parseInt(s.maxScore || 0, 10);
+      if (sectionScore > maxScore) {
+        await t.rollback();
+        return res.status(400).json({ message: `Section "${s.name}" score exceeds max (${sectionScore}/${maxScore})` });
+      }
+
+      // Flatten strengths/gaps/recommendations into separate rows (1 per recommendation set)
+      const maxLen = Math.max(
+        s.strengths.length,
+        s.gaps.length,
+        s.recommendations.length
+      );
+
+      for (let i = 0; i < maxLen; i++) {
+        answerInserts.push({
+          response_id: resp.id,
+          question_id: null, // we don’t have question reference from report, only section-level summary
+          option_id: null,
+          option_score_snapshot: 0,
+          option_strength_snapshot: s.strengths[i] || null,
+          option_gap_snapshot: s.gaps[i] || null,
+          option_recommendation_snapshot: s.recommendations[i] || null,
+          answered_at: new Date()
+        });
+      }
+    }
+
+    if (answerInserts.length) {
+      await Answer.bulkCreate(answerInserts, { transaction: t });
+    }
+
+    await t.commit();
+    return res.json({ success: true });
+  } catch (err) {
+    console.error('❌ Error in updateSummaryFromReport:', err);
+    try { await t.rollback(); } catch (e) {}
+    return res.status(500).json({ message: 'Server error', error: err.message });
+  }
+};
+
+module.exports = { updateSummaryFromReport };
 
 
 
-module.exports = { getSummary,getAllSubmissions };
+
+module.exports = { getSummary,getAllSubmissions ,updateSummaryFromReport};
 
 // module.exports = { getSummary };

@@ -13,5 +13,6 @@ router.post('/response/:session_uuid/submit', responseController.submitAnswers);
 // Get summary
 router.get('/response/:session_uuid/summary', scoreController.getSummary);
 router.get('/response/all-submissions', scoreController.getAllSubmissions);
+router.put('/response/:session_uuid/edit', scoreController.updateSummaryFromReport);
 
 module.exports = router;
