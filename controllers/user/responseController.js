@@ -42,17 +42,16 @@ const submitAnswers = async (req, res) => {
   let t;
   try {
     const { session_uuid } = req.params;
-    const { answers} = req.body;
-    // let session_uuid;
-    // let answers;
+    const { answers } = req.body;
+
     if (!Array.isArray(answers) || answers.length === 0)
       return res.status(400).json({ message: 'answers required' });
 
-    let resp = await Response.findOne({ where: { session_uuid } });
+    const resp = await Response.findOne({ where: { session_uuid } });
     if (!resp)
       return res.status(404).json({ message: 'session not found' });
 
-    // ✅ Transaction only for saving answers
+    // ✅ Transaction for saving/updating answers
     t = await sequelize.transaction();
 
     for (const a of answers) {
@@ -65,7 +64,9 @@ const submitAnswers = async (req, res) => {
       const option = await Option.findByPk(option_id, { transaction: t });
       if (!option || String(option.question_id) !== String(question_id)) {
         await t.rollback();
-        return res.status(400).json({ message: `invalid option ${option_id} for question ${question_id}` });
+        return res.status(400).json({
+          message: `invalid option ${option_id} for question ${question_id}`
+        });
       }
 
       const payload = {
@@ -84,44 +85,82 @@ const submitAnswers = async (req, res) => {
 
     await t.commit();
 
-    // // ✅ Now outside the transaction – do scoring & caching (read-only ops)
-    // const sectionTotals = await Answer.findAll({
-    //   attributes: [
-    //     [Sequelize.col('question.section_id'), 'section_id'],
-    //     [Sequelize.fn('COUNT', Sequelize.col('Answer.id')), 'questions_answered'],
-    //     [Sequelize.fn('SUM', Sequelize.col('option_score_snapshot')), 'section_score']
-    //   ],
-    //   where: { response_id: resp.id },
-    //   include: [{ model: Question, attributes: [], required: true }],
-    //   group: ['question.section_id'],
-    //   raw: true
-    // });
+    // ✅ Now, recalculate SectionScoreCache outside transaction
+    const sectionTotals = await Answer.findAll({
+      attributes: [
+        [Sequelize.col('question.section_id'), 'section_id'],
+        [Sequelize.fn('COUNT', Sequelize.col('Answer.id')), 'questions_answered'],
+        [Sequelize.fn('SUM', Sequelize.col('option_score_snapshot')), 'section_score'],
+      ],
+      where: { response_id: resp.id },
+      include: [{ model: Question, attributes: [] }],
+      group: ['question.section_id'],
+      raw: true
+    });
 
-    // for (const s of sectionTotals) {
-    //   const section_id = s.section_id;
-    //   const total_score = parseInt(s.section_score || 0, 10);
-    //   const questions_answered = parseInt(s.questions_answered || 0, 10);
+    // Get text data for each section
+    const sectionTexts = await Answer.findAll({
+      attributes: [
+        [Sequelize.col('question.section_id'), 'section_id'],
+        'option_strength_snapshot',
+        'option_gap_snapshot',
+        'option_recommendation_snapshot'
+      ],
+      where: { response_id: resp.id },
+      include: [{ model: Question, attributes: [] }],
+      raw: true
+    });
 
-    //   await SectionScoreCache.upsert({
-    //     response_id: resp.id,
-    //     section_id,
-    //     total_score,
-    //     questions_answered,
-    //     last_calculated_at: new Date()
-    //   });
-    // }
+    // Aggregate text data by section
+    const textMap = {};
+    for (const row of sectionTexts) {
+      const sid = row.section_id;
+      if (!textMap[sid]) {
+        textMap[sid] = { strengths: new Set(), gaps: new Set(), recommendations: new Set() };
+      }
+      if (row.option_strength_snapshot) textMap[sid].strengths.add(row.option_strength_snapshot);
+      if (row.option_gap_snapshot) textMap[sid].gaps.add(row.option_gap_snapshot);
+      if (row.option_recommendation_snapshot)
+        textMap[sid].recommendations.add(row.option_recommendation_snapshot);
+    }
 
-    // await resp.update({ completed_at: new Date() });
-    const summary =  await getSummary(session_uuid);
-    return res.status(200).json({ message: 'answers submitted successfully', summary });
+    // ✅ Update cache table
+    for (const s of sectionTotals) {
+      const section_id = s.section_id;
+      const total_score = parseInt(s.section_score || 0, 10);
+      const questions_answered = parseInt(s.questions_answered || 0, 10);
 
+      const texts = textMap[section_id] || { strengths: new Set(), gaps: new Set(), recommendations: new Set() };
 
+      await SectionScoreCache.upsert({
+        response_id: resp.id,
+        section_id,
+        total_score,
+        questions_answered,
+        strength: Array.from(texts.strengths).join('\n') || null,
+        gap: Array.from(texts.gaps).join('\n') || null,
+        recommendation: Array.from(texts.recommendations).join('\n') || null,
+        last_calculated_at: new Date()
+      });
+    }
+
+    // ✅ Optionally mark as completed
+    await resp.update({ completed_at: new Date() });
+
+    // ✅ Fetch latest summary
+    const summary = await getSummary(session_uuid);
+
+    return res.status(200).json({
+      message: 'answers submitted successfully',
+      summary
+    });
   } catch (err) {
     if (t) await t.rollback();
-    console.error('SubmitAnswers error:', err);
-    return res.status(500).json({ message: 'server error' });
+    console.error('❌ SubmitAnswers error:', err);
+    return res.status(500).json({ message: 'server error', error: err.message });
   }
 };
+
 const getSummary = async (session_uuid) => {
   try {
     // const { session_uuid } = req.params;

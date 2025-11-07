@@ -10,6 +10,9 @@ module.exports = (sequelize) => {
     response_id: { type: DataTypes.BIGINT.UNSIGNED, allowNull: false },
     section_id: { type: DataTypes.BIGINT.UNSIGNED, allowNull: false },
     total_score: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
+    recommendation : { type: DataTypes.TEXT, allowNull: true ,defaultValue: ''},
+    gap : { type: DataTypes.TEXT, allowNull: true ,defaultValue: ''},
+    strength : { type: DataTypes.TEXT, allowNull: true ,defaultValue: ''},
     questions_answered: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
     last_calculated_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW }
   }, {
