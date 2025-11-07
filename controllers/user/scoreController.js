@@ -19,15 +19,15 @@ const getSummary = async (req, res) => {
     const resp = await Response.findOne({ where: { session_uuid } });
     if (!resp) return res.status(404).json({ message: 'Session not found' });
 
-    // 2️⃣ Try loading cached section scores
+    // 2️⃣ Try loading cached section scores (which now include strength/gap/recommendation)
     const cacheRows = await SectionScoreCache.findAll({
       where: { response_id: resp.id },
       raw: true
     });
 
+    // 3️⃣ Dynamic aggregation if cache is empty
     let sectionData = [];
     if (!cacheRows.length) {
-      // 3️⃣ Dynamic aggregation if cache is empty
       sectionData = await Answer.findAll({
         attributes: [
           [Sequelize.col('question.section_id'), 'section_id'],
@@ -57,18 +57,19 @@ const getSummary = async (req, res) => {
         section_id: s.id,
         section_title: s.title,
         section_score: row ? parseInt(row.section_score || row.total_score || 0, 10) : 0,
-        questions_answered: row ? parseInt(row.questions_answered || 0, 10) : 0
+        questions_answered: row ? parseInt(row.questions_answered || 0, 10) : 0,
+        strength: row?.strength || null,
+        gap: row?.gap || null,
+        recommendation: row?.recommendation || null
       };
     });
 
     // 6️⃣ Compute max possible scores per section dynamically
-    // NOTE: assumes an Option table exists and linked to Question
     const maxScores = await sequelize.query(
       `
         SELECT q.section_id, SUM(o.score) AS max_score
         FROM hr_analyzer_questions q
         JOIN hr_analyzer_options o ON o.question_id = q.id
-       -- WHERE o.deleted_at IS NULL OR o.deleted_at IS NULL
         GROUP BY q.section_id
       `,
       { type: Sequelize.QueryTypes.SELECT }
@@ -87,7 +88,7 @@ const getSummary = async (req, res) => {
     const totalScore = sectionRatings.reduce((sum, x) => sum + x.score, 0);
     const maxmScore = sectionRatings.reduce((sum, x) => sum + x.mxmScore, 0);
 
-    // 7️⃣ Derive key insights: strong, weak, improvement areas
+    // 7️⃣ Derive key insights
     const sortedSections = [...sectionRatings].sort((a, b) => b.score - a.score);
     const keyInsights = [
       {
@@ -99,27 +100,42 @@ const getSummary = async (req, res) => {
         status: 'danger'
       },
       {
-        name: `Needs Improvement: ${sortedSections[Math.floor(sortedSections.length / 2)]?.sectionName || 'N/A'}`,
+        name: `Needs Improvement: ${
+          sortedSections[Math.floor(sortedSections.length / 2)]?.sectionName || 'N/A'
+        }`,
         status: 'warning'
       }
     ];
 
-    // 8️⃣ Build detailed summary per section from Answer table
-    const answers = await Answer.findAll({
-      where: { response_id: resp.id },
-      include: [{ model: Question, attributes: ['section_id'] }],
-      raw: true
-    });
+    // 8️⃣ Preload answers (needed if cache is empty)
+    let answers = [];
+    if (!cacheRows.length) {
+      answers = await Answer.findAll({
+        where: { response_id: resp.id },
+        include: [{ model: Question, attributes: ['section_id'] }],
+        raw: true
+      });
+    }
 
+    // 9️⃣ Build detailed summary per section
     const sectionWiseAnswers = sections.map((s) => {
-      const secAnswers = answers.filter((a) => String(a['question.section_id']) === String(s.id));
-      const strengths = secAnswers
-        .map((a) => a.option_strength_snapshot)
-        .filter(Boolean);
-      const gaps = secAnswers.map((a) => a.option_gap_snapshot).filter(Boolean);
-      const recommendations = secAnswers
-        .map((a) => a.option_recommendation_snapshot)
-        .filter(Boolean);
+      const row = sectionSummary.find((r) => String(r.section_id) === String(s.id));
+
+      const secAnswers = !cacheRows.length
+        ? answers.filter((a) => String(a['question.section_id']) === String(s.id))
+        : [];
+
+      const strengths = row?.strength
+        ? row.strength.split('\n').filter(Boolean)
+        : secAnswers.map((a) => a.option_strength_snapshot).filter(Boolean);
+
+      const gaps = row?.gap
+        ? row.gap.split('\n').filter(Boolean)
+        : secAnswers.map((a) => a.option_gap_snapshot).filter(Boolean);
+
+      const recommendations = row?.recommendation
+        ? row.recommendation.split('\n').filter(Boolean)
+        : secAnswers.map((a) => a.option_recommendation_snapshot).filter(Boolean);
 
       const score = sectionRatings.find((r) => r.sectionName === s.title)?.score || 0;
       const maxScore = sectionRatings.find((r) => r.sectionName === s.title)?.mxmScore || 0;
@@ -136,7 +152,7 @@ const getSummary = async (req, res) => {
       };
     });
 
-    // 9️⃣ Final JSON report object
+    // 🔟 Final JSON report object
     const report = {
       id: `RPT-${resp.id}`,
       company: resp.company || 'Unknown',
@@ -163,6 +179,8 @@ const getSummary = async (req, res) => {
     return res.status(500).json({ message: 'Server error', error: err.message });
   }
 };
+
+
 // controllers/adminController.js
 
 // const { Response, SectionScoreCache, Sequelize, sequelize } = require('../models');
@@ -269,7 +287,7 @@ const updateSummaryFromReport = async (req, res) => {
     const contact = report.contact || null;
 
     // Find response
-    const resp = await Response.findOne({ where: { session_uuid }, transaction: t });
+    const resp = await Response.findOne({ where: { session_uuid }});
     if (!resp) {
       await t.rollback();
       return res.status(404).json({ message: 'Response not found' });
@@ -288,7 +306,7 @@ const updateSummaryFromReport = async (req, res) => {
     }
 
     // Load section mapping
-    const sections = await Section.findAll({ attributes: ['id', 'title'], raw: true, transaction: t });
+    const sections = await Section.findAll({ attributes: ['id', 'title'], raw: true});
     const sectionMap = {};
     sections.forEach(s => { sectionMap[s.title] = s.id; });
 
@@ -297,9 +315,11 @@ const updateSummaryFromReport = async (req, res) => {
 
     // Deduplicate by section_id (keep the last occurrence)
 const sectionCacheMap = {};
+
 for (const s of sectionRatings) {
   const sectionId = sectionMap[s.sectionName];
   if (!sectionId) continue;
+
   const totalScore = parseInt(s.score || 0, 10);
   const maxScore = parseInt(s.mxmScore || 0, 10);
   if (totalScore > maxScore) {
@@ -308,60 +328,69 @@ for (const s of sectionRatings) {
       message: `Section "${s.sectionName}" score exceeds max (${totalScore}/${maxScore})`
     });
   }
-  // overwrite existing if duplicated
+
+  // find summary details for this section
+  const matchingSummary = (report.details.summary || []).find(
+    d => d.name === s.sectionName
+  );
+
   sectionCacheMap[sectionId] = {
     response_id: resp.id,
     section_id: sectionId,
     total_score: totalScore,
     questions_answered: 0,
-    last_calculated_at: new Date()
+    last_calculated_at: new Date(),
+    strength: matchingSummary?.strengths?.join('\n') || null,
+    gap: matchingSummary?.gaps?.join('\n') || null,
+    recommendation: matchingSummary?.recommendations?.join('\n') || null
   };
 }
+
 const sectionCacheInserts = Object.values(sectionCacheMap);
 if (sectionCacheInserts.length) {
   await SectionScoreCache.bulkCreate(sectionCacheInserts, { transaction: t });
 }
 
 
-    // 4️⃣ Replace Answers
-    await Answer.destroy({ where: { response_id: resp.id }, transaction: t });
+    // // 4️⃣ Replace Answers
+    // await Answer.destroy({ where: { response_id: resp.id }, transaction: t });
 
-    const answerInserts = [];
-    for (const s of summaryDetails) {
-      const sectionId = sectionMap[s.name];
-      if (!sectionId) continue;
+    // const answerInserts = [];
+    // for (const s of summaryDetails) {
+    //   const sectionId = sectionMap[s.name];
+    //   if (!sectionId) continue;
 
-      const sectionScore = parseInt(s.score || 0, 10);
-      const maxScore = parseInt(s.maxScore || 0, 10);
-      if (sectionScore > maxScore) {
-        await t.rollback();
-        return res.status(400).json({ message: `Section "${s.name}" score exceeds max (${sectionScore}/${maxScore})` });
-      }
+    //   const sectionScore = parseInt(s.score || 0, 10);
+    //   const maxScore = parseInt(s.maxScore || 0, 10);
+    //   if (sectionScore > maxScore) {
+    //     await t.rollback();
+    //     return res.status(400).json({ message: `Section "${s.name}" score exceeds max (${sectionScore}/${maxScore})` });
+    //   }
 
-      // Flatten strengths/gaps/recommendations into separate rows (1 per recommendation set)
-      const maxLen = Math.max(
-        s.strengths.length,
-        s.gaps.length,
-        s.recommendations.length
-      );
+    //   // Flatten strengths/gaps/recommendations into separate rows (1 per recommendation set)
+    //   const maxLen = Math.max(
+    //     s.strengths.length,
+    //     s.gaps.length,
+    //     s.recommendations.length
+    //   );
 
-      for (let i = 0; i < maxLen; i++) {
-        answerInserts.push({
-          response_id: resp.id,
-          question_id: null, // we don’t have question reference from report, only section-level summary
-          option_id: null,
-          option_score_snapshot: 0,
-          option_strength_snapshot: s.strengths[i] || null,
-          option_gap_snapshot: s.gaps[i] || null,
-          option_recommendation_snapshot: s.recommendations[i] || null,
-          answered_at: new Date()
-        });
-      }
-    }
+    //   for (let i = 0; i < maxLen; i++) {
+    //     answerInserts.push({
+    //       response_id: resp.id,
+    //       question_id: null, // we don’t have question reference from report, only section-level summary
+    //       option_id: null,
+    //       option_score_snapshot: 0,
+    //       option_strength_snapshot: s.strengths[i] || null,
+    //       option_gap_snapshot: s.gaps[i] || null,
+    //       option_recommendation_snapshot: s.recommendations[i] || null,
+    //       answered_at: new Date()
+    //     });
+    //   }
+    // }
 
-    if (answerInserts.length) {
-      await Answer.bulkCreate(answerInserts, { transaction: t });
-    }
+    // if (answerInserts.length) {
+    //   await Answer.bulkCreate(answerInserts, { transaction: t });
+    // }
 
     await t.commit();
     return res.json({ success: true });
@@ -372,7 +401,6 @@ if (sectionCacheInserts.length) {
   }
 };
 
-module.exports = { updateSummaryFromReport };
 
 
 
