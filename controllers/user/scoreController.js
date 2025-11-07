@@ -163,7 +163,91 @@ const getSummary = async (req, res) => {
     return res.status(500).json({ message: 'Server error', error: err.message });
   }
 };
+// controllers/adminController.js
 
-module.exports = { getSummary };
+// const { Response, SectionScoreCache, Sequelize, sequelize } = require('../models');
+
+const getAllSubmissions = async (req, res) => {
+  try {
+    // 🔹 Query params for pagination & search
+    const page = parseInt(req.query.page || '1', 10);
+    const limit = parseInt(req.query.limit || '20', 10);
+    const offset = (page - 1) * limit;
+    const search = req.query.search ? req.query.search.trim() : '';
+
+    // 🔹 Where condition (search across name, email, company)
+    const whereClause = {};
+    if (search) {
+      whereClause[Sequelize.Op.or] = [
+        { full_name: { [Sequelize.Op.like]: `%${search}%` } },
+        { email: { [Sequelize.Op.like]: `%${search}%` } },
+        { company: { [Sequelize.Op.like]: `%${search}%` } },
+        { contact: { [Sequelize.Op.like]: `%${search}%` } }
+      ];
+    }
+
+    // 🔹 Fetch responses with pagination
+    const { rows: responses, count: total } = await Response.findAndCountAll({
+      where: whereClause,
+      order: [['started_at', 'DESC']],
+      limit,
+      offset,
+      raw: true
+    });
+
+    // 🔹 Get total scores per response (from cache)
+    const responseIds = responses.map((r) => r.id);
+    let scoreData = [];
+    if (responseIds.length) {
+      scoreData = await SectionScoreCache.findAll({
+        attributes: [
+          'response_id',
+          [sequelize.fn('SUM', sequelize.col('total_score')), 'total_score']
+        ],
+        where: { response_id: responseIds },
+        group: ['response_id'],
+        raw: true
+      });
+    }
+
+    const scoreMap = {};
+    scoreData.forEach((s) => (scoreMap[s.response_id] = parseInt(s.total_score, 10)));
+
+    // 🔹 Build admin-friendly list
+    const submissions = responses.map((r) => {
+      const totalScore = scoreMap[r.id] || 0;
+      return {
+        id: r.id,
+        session_uuid: r.session_uuid,
+        company: r.company || 'Unknown',
+        full_name: r.full_name || 'Anonymous',
+        email: r.email || '-',
+        contact: r.contact || '-',
+        score: totalScore,
+        status: r.completed_at ? 'Completed' : 'In Progress',
+        submitted_at: r.completed_at
+          ? new Date(r.completed_at).toISOString().split('T')[0]
+          : null,
+        started_at: new Date(r.started_at).toISOString().split('T')[0]
+      };
+    });
+
+    // 🔹 Return paginated response
+    return res.json({
+      page,
+      pageSize: limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+      data: submissions
+    });
+  } catch (err) {
+    console.error('❌ Error in getAllSubmissions:', err);
+    return res.status(500).json({ message: 'Server error', error: err.message });
+  }
+};
+
+
+
+module.exports = { getSummary,getAllSubmissions };
 
 // module.exports = { getSummary };
