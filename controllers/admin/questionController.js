@@ -256,7 +256,7 @@ const remove = async (req, res) => {
 };
 // bulk upload
 const bulkCreateQuestions = async (req, res) => {
-  const t = await sequelize.transaction();
+  const t = await db.sequelize.transaction();
   try {
     const questionsPayload = req.body;
 
