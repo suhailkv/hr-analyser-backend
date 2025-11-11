@@ -36,6 +36,7 @@ router.delete('/sections/:id', requireAdmin, sectionController.remove);
 
 // Questions
 router.post('/questions', requireAdmin, questionController.create);
+router.post('/questions/bulk', requireAdmin, questionController.bulkCreateQuestions);
 router.get('/questions', requireAdmin, questionController.list);
 router.get('/questions/:id', requireAdmin, questionController.getOne);
 router.put('/questions/:id', requireAdmin, questionController.update);
