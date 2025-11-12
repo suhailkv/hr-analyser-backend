@@ -290,7 +290,7 @@ const bulkCreateQuestions = async (req, res) => {
       const questionRow = await Question.create(
         {
           section_id: sectionRow.id,
-          question: question
+          text: question
         },
         { transaction: t }
       );
@@ -298,7 +298,7 @@ const bulkCreateQuestions = async (req, res) => {
       // 3️⃣ Create associated Options
       const optionInserts = options.map((opt) => ({
         question_id: questionRow.id,
-        name: opt.name,
+        label: opt.name,
         score: opt.score || 0,
         gap: opt.gap || null,
         strength: opt.strength || null,
