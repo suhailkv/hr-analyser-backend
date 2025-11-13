@@ -60,7 +60,8 @@ const getSummary = async (req, res) => {
         questions_answered: row ? parseInt(row.questions_answered || 0, 10) : 0,
         strength: row?.strength || null,
         gap: row?.gap || null,
-        recommendation: row?.recommendation || null
+        recommendation: row?.recommendation || null,
+        graph_type: row?.graph_type || null
       };
     });
 
@@ -330,67 +331,27 @@ for (const s of sectionRatings) {
   }
 
   // find summary details for this section
-  const matchingSummary = (report.details.summary || []).find(
-    d => d.name === s.sectionName
-  );
+      const matchingSummary = (report.details.summary || []).find(
+        d => d.name === s.sectionName
+      );
 
-  sectionCacheMap[sectionId] = {
-    response_id: resp.id,
-    section_id: sectionId,
-    total_score: totalScore,
-    questions_answered: 0,
-    last_calculated_at: new Date(),
-    strength: matchingSummary?.strengths?.join('\n') || null,
-    gap: matchingSummary?.gaps?.join('\n') || null,
-    recommendation: matchingSummary?.recommendations?.join('\n') || null
-  };
-}
+      sectionCacheMap[sectionId] = {
+        response_id: resp.id,
+        section_id: sectionId,
+        total_score: totalScore,
+        questions_answered: 0,
+        last_calculated_at: new Date(),
+        strength: matchingSummary?.strengths?.join('\n') || null,
+        gap: matchingSummary?.gaps?.join('\n') || null,
+        recommendation: matchingSummary?.recommendations?.join('\n') || null,
+        graph_type: matchingSummary.graphType
+      };
+    }
 
-const sectionCacheInserts = Object.values(sectionCacheMap);
-if (sectionCacheInserts.length) {
-  await SectionScoreCache.bulkCreate(sectionCacheInserts, { transaction: t });
-}
-
-
-    // // 4️⃣ Replace Answers
-    // await Answer.destroy({ where: { response_id: resp.id }, transaction: t });
-
-    // const answerInserts = [];
-    // for (const s of summaryDetails) {
-    //   const sectionId = sectionMap[s.name];
-    //   if (!sectionId) continue;
-
-    //   const sectionScore = parseInt(s.score || 0, 10);
-    //   const maxScore = parseInt(s.maxScore || 0, 10);
-    //   if (sectionScore > maxScore) {
-    //     await t.rollback();
-    //     return res.status(400).json({ message: `Section "${s.name}" score exceeds max (${sectionScore}/${maxScore})` });
-    //   }
-
-    //   // Flatten strengths/gaps/recommendations into separate rows (1 per recommendation set)
-    //   const maxLen = Math.max(
-    //     s.strengths.length,
-    //     s.gaps.length,
-    //     s.recommendations.length
-    //   );
-
-    //   for (let i = 0; i < maxLen; i++) {
-    //     answerInserts.push({
-    //       response_id: resp.id,
-    //       question_id: null, // we don’t have question reference from report, only section-level summary
-    //       option_id: null,
-    //       option_score_snapshot: 0,
-    //       option_strength_snapshot: s.strengths[i] || null,
-    //       option_gap_snapshot: s.gaps[i] || null,
-    //       option_recommendation_snapshot: s.recommendations[i] || null,
-    //       answered_at: new Date()
-    //     });
-    //   }
-    // }
-
-    // if (answerInserts.length) {
-    //   await Answer.bulkCreate(answerInserts, { transaction: t });
-    // }
+    const sectionCacheInserts = Object.values(sectionCacheMap);
+    if (sectionCacheInserts.length) {
+      await SectionScoreCache.bulkCreate(sectionCacheInserts, { transaction: t });
+    }
 
     await t.commit();
     return res.json({ success: true });
@@ -401,10 +362,5 @@ if (sectionCacheInserts.length) {
   }
 };
 
-
-
-
-
 module.exports = { getSummary,getAllSubmissions ,updateSummaryFromReport};
 
-// module.exports = { getSummary };

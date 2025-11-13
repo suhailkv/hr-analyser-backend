@@ -14,7 +14,8 @@ module.exports = (sequelize) => {
     gap : { type: DataTypes.TEXT, allowNull: true ,defaultValue: ''},
     strength : { type: DataTypes.TEXT, allowNull: true ,defaultValue: ''},
     questions_answered: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
-    last_calculated_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW }
+    last_calculated_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
+    graph_type : { type: DataTypes.STRING(100), allowNull: true }
   }, {
     tableName: 'hr_analyzer_section_scores_cache',
     timestamps: false,
