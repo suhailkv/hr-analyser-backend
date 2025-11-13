@@ -82,7 +82,8 @@ const getSummary = async (req, res) => {
       return {
         sectionName: sec.section_title,
         score: sec.section_score,
-        mxmScore: maxRow ? parseInt(maxRow.max_score || 0, 10) : 0
+        mxmScore: maxRow ? parseInt(maxRow.max_score || 0, 10) : 0,
+        graphType : sec.graph_type || null
       };
     });
 
