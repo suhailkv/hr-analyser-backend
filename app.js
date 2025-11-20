@@ -21,6 +21,9 @@ app.use(cors({
 app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ extended: true }));
 
+// ✅ Serve uploads directory for image access (MUST be before frontend and wildcard route)
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
 // ✅ Root endpoint
 app.get('/health', (req, res) => res.json({ message: 'HR Analyzer API' }));
 
@@ -30,7 +33,6 @@ app.use('/user', userRoutes);
 
 // ✅ Serve frontend build files
 const frontendBuildPath = process.env.FRONTEND_BUILD_PATH || path.join(__dirname, '../frontend/build');
-
 app.use(express.static(frontendBuildPath));
 
 // ✅ Handle all other routes (SPA fallback)
