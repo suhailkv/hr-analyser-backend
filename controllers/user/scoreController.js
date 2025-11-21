@@ -544,9 +544,9 @@ const getSummary = async (req, res) => {
 
         
         recommendedNextSteps: {
-          immediate: sectionSummary[0]?.recommendedNextSteps_immediate ? sectionSummary[0].recommendedNextSteps_immediate.split('\n') : [],
-          shortTerm: sectionSummary[0]?.recommendedNextSteps_shortTerm ? sectionSummary[0].recommendedNextSteps_shortTerm.split('\n') : [],
-          longTerm: sectionSummary[0]?.recommendedNextSteps_longTerm ? sectionSummary[0].recommendedNextSteps_longTerm.split('\n') : [],
+          immediate: resp.recommended_immediate ? resp.recommended_immediate.split('\n') : [],
+          shortTerm: resp.recommended_short_term ? resp.recommended_short_term.split('\n') : [],
+          longTerm: resp.recommended_long_term ? resp.recommended_long_term.split('\n') : [],
         },
         frontPageImage: sectionSummary[0]?.frontPage_Image || null,
         backPageImage: sectionSummary[0]?.backPage_Image || null,
