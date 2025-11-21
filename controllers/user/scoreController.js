@@ -392,7 +392,8 @@ const getSummary = async (req, res) => {
         attributes: [
           [Sequelize.col('question.section_id'), 'section_id'],
           [Sequelize.fn('COUNT', Sequelize.col('Answer.id')), 'questions_answered'],
-          [Sequelize.fn('SUM', Sequelize.col('option_score_snapshot')), 'section_score']
+          [Sequelize.fn('SUM', Sequelize.col('option_score_snapshot')), 'section_score'],
+
         ],
         where: { response_id: resp.id },
         include: [{ model: Question, attributes: [] }],
@@ -424,11 +425,11 @@ const getSummary = async (req, res) => {
         graph_type: row?.graph_type || null,
 
         // updated new - add recommendedNextSteps and front/back page images from cache if present
-        recommendedNextSteps_immediate: row?.recommendedNextSteps_immediate || null,
-        recommendedNextSteps_shortTerm: row?.recommendedNextSteps_shortTerm || null,
-        recommendedNextSteps_longTerm: row?.recommendedNextSteps_longTerm || null,
-        frontPage_Image: row?.frontPage_Image || null,
-        backPage_Image: row?.backPage_Image || null,
+        recommendedNextSteps_immediate: resp?.recommended_immediate || null,
+        recommendedNextSteps_shortTerm: resp?.recommended_long_term || null,
+        recommendedNextSteps_longTerm: resp?.recommended_short_term || null,
+        frontPage_Image: resp?.front_cover_image || null,
+        backPage_Image: resp?.back_cover_image || null,
       };
     });
 
@@ -665,11 +666,13 @@ const updateSummaryFromReport = async (req, res) => {
       {
         company,
         contact,
-        frontPageImage: frontPageImage || null,
-        backPageImage: backPageImage || null,
-        recommendedNextSteps: recommendedNextSteps || null,
+        front_cover_image: frontPageImage || null,
+        back_cover_image: backPageImage || null,
+        recommended_immediate : recommendedNextSteps?.immediate?.join('\n') || null,
+        recommended_short_term : recommendedNextSteps?.shortTerm?.join('\n') || null,
+        recommended_long_term : recommendedNextSteps?.longTerm?.join('\n') || null,
       }, 
-      { transaction: t }
+      // { transaction: t }
     );
 
     const sectionRatings = report.details.sectionRatings || [];
@@ -717,11 +720,11 @@ const updateSummaryFromReport = async (req, res) => {
         recommendation: matchingSummary?.recommendations?.join('\n') || null,
         graph_type: matchingSummary.graphType,
 
-        recommendedNextSteps_immediate: recommendedNextSteps?.immediate?.join('\n') || null,
-        recommendedNextSteps_shortTerm: recommendedNextSteps?.shortTerm?.join('\n') || null,
-        recommendedNextSteps_longTerm: recommendedNextSteps?.longTerm?.join('\n') || null,
-        frontPage_Image: frontPageImage || null,
-        backPage_Image: backPageImage || null,
+        // recommendedNextSteps_immediate: recommendedNextSteps?.immediate?.join('\n') || null,
+        // recommendedNextSteps_shortTerm: recommendedNextSteps?.shortTerm?.join('\n') || null,
+        // recommendedNextSteps_longTerm: recommendedNextSteps?.longTerm?.join('\n') || null,
+        // frontPage_Image: frontPageImage || null,
+        // backPage_Image: backPageImage || null,
       };
     }
 

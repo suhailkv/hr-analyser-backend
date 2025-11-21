@@ -15,7 +15,12 @@ module.exports = (sequelize) => {
     ip_address: { type: DataTypes.STRING(45), allowNull: true },
     user_agent: { type: DataTypes.TEXT, allowNull: true },
     started_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
-    completed_at: { type: DataTypes.DATE, allowNull: true }
+    completed_at: { type: DataTypes.DATE, allowNull: true },
+    front_cover_image: { type: DataTypes.STRING, allowNull: true,default:null },
+    back_cover_image: { type: DataTypes.STRING, allowNull: true ,default:null},
+    recommended_immediate: { type: DataTypes.TEXT, allowNull: true },
+    recommended_short_term: { type: DataTypes.TEXT, allowNull: true },
+    recommended_long_term: { type: DataTypes.TEXT, allowNull: true }
   }, {
     tableName: 'hr_analyzer_responses',
     timestamps: false
