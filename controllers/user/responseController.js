@@ -149,7 +149,7 @@ const submitAnswers = async (req, res) => {
 
     // ✅ Fetch latest summary
     const summary = await getSummary(session_uuid);
-
+    summary.session_uuid = session_uuid;
     return res.status(200).json({
       message: 'answers submitted successfully',
       summary
