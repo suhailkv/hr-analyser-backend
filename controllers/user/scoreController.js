@@ -616,6 +616,7 @@ const getAllSubmissions = async (req, res) => {
         full_name: r.full_name || 'Anonymous',
         email: r.email || '-',
         contact: r.contact || '-',
+        isEnquired : r.is_enquired ? r.is_enquired : null,
         score: totalScore,
         status: r.completed_at ? 'Completed' : 'In Progress',
         submitted_at: r.completed_at

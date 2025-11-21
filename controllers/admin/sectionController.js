@@ -82,4 +82,19 @@ const remove = async (req, res) => {
   }
 };
 
-module.exports = { create, list, getOne, update, remove };
+const markAsEnquired =  async (req, res) => {
+  try {
+    const uuid = req.params.uuid;
+    const response = await db.Response.findOne({ where: { session_uuid : uuid } });
+    if (!response) return res.status(404).json({ message: 'Response not found' });
+    response.is_enquired = new Date();
+    await response.save();
+    return res.json({ message: 'User enquiry endpoint - to be implemented' });
+  }
+  catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: 'server error' });
+  }
+  
+}
+module.exports = { create, list, getOne, update, remove ,markAsEnquired};

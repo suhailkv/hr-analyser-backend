@@ -20,7 +20,8 @@ module.exports = (sequelize) => {
     back_cover_image: { type: DataTypes.STRING, allowNull: true ,default:null},
     recommended_immediate: { type: DataTypes.TEXT, allowNull: true },
     recommended_short_term: { type: DataTypes.TEXT, allowNull: true },
-    recommended_long_term: { type: DataTypes.TEXT, allowNull: true }
+    recommended_long_term: { type: DataTypes.TEXT, allowNull: true },
+    is_enquired : { type: DataTypes.DATE, allowNull: true, defaultValue: null }
   }, {
     tableName: 'hr_analyzer_responses',
     timestamps: false

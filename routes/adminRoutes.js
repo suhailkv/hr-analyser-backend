@@ -62,7 +62,7 @@ router.delete("/options/:id", requireAdmin, optionController.remove);
 
 // admin submissions
 router.get("/submissions", requireAdmin, scoreController.getAllSubmissions);
-
+router.post("/enquire/:uuid",requireAdmin, sectionController.markAsEnquired);
 // Cover page - List existing uploaded images
 router.get(
   '/report/:session_uuid/cover-images',
