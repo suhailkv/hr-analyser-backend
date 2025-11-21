@@ -384,7 +384,7 @@ const getSummary = async (req, res) => {
       where: { response_id: resp.id },
       raw: true
     });
-
+    const allowedSectionIds = cacheRows.map(row => row.section_id);
     // 3️⃣ Dynamic aggregation if cache is empty
     let sectionData = [];
     if (!cacheRows.length) {
@@ -405,6 +405,9 @@ const getSummary = async (req, res) => {
     // 4️⃣ Always load section definitions (sorted)
     const sections = await Section.findAll({
       order: [['sort_order', 'ASC'], ['id', 'ASC']],
+      where : {
+        id : allowedSectionIds.length ? allowedSectionIds : [0] 
+      },
       raw: true
     });
 
