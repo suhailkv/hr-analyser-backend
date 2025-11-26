@@ -590,7 +590,13 @@ const getAllSubmissions = async (req, res) => {
       offset,
       raw: true
     });
-
+    const meta = {
+        totalRecords: count,
+        totalPages: Math.ceil(count / limit),
+        currentPage: page,
+        hasNextPage: page < Math.ceil(count / limit),
+        hasPrevPage: page > 1,
+    };
     // 🔹 Get total scores per response (from cache)
     const responseIds = responses.map((r) => r.id);
     let scoreData = [];
@@ -635,7 +641,8 @@ const getAllSubmissions = async (req, res) => {
       pageSize: limit,
       total,
       totalPages: Math.ceil(total / limit),
-      data: submissions
+      data: submissions,
+      meta
     });
   } catch (err) {
     console.error('❌ Error in getAllSubmissions:', err);
