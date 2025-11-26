@@ -19,17 +19,16 @@ router.post("/auth/login", authController.login);
 
 // Middleware to protect admin routes
 const requireAdmin = (req, res, next) => {
-  // const authHeader = req.headers.authorization;
-  // if (!authHeader)
-  //   return res.status(401).json({ message: "missing authorization header" });
-  // const token = authHeader.split(" ")[1];
-  // if (!token) return res.status(401).json({ message: "invalid token" });
+  const authHeader = req.headers.authorization;
+  if (!authHeader)
+    return res.status(401).json({ message: "missing authorization header" });
+  const token = authHeader.split(" ")[1];
+  if (!token) return res.status(401).json({ message: "invalid token" });
   try {
-    // const payload = jwt.verify(token, process.env.JWT_SECRET);
-    // req.adminId = payload.id;
-    // req.adminEmail = payload.email;
-    req.adminId = 12;
-    req.adminEmail = 'suhailkv99@gmail.com';
+    const payload = jwt.verify(token, process.env.JWT_SECRET);
+    req.adminId = payload.id;
+    req.adminEmail = payload.email;
+
     next();
   } catch (err) {
     return res.status(401).json({ message: "invalid token" });
