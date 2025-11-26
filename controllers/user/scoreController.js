@@ -591,10 +591,10 @@ const getAllSubmissions = async (req, res) => {
       raw: true
     });
     const meta = {
-        totalRecords: count,
-        totalPages: Math.ceil(count / limit),
+        totalRecords: total,
+        totalPages: Math.ceil(total / limit),
         currentPage: page,
-        hasNextPage: page < Math.ceil(count / limit),
+        hasNextPage: page < Math.ceil(total / limit),
         hasPrevPage: page > 1,
     };
     // 🔹 Get total scores per response (from cache)
