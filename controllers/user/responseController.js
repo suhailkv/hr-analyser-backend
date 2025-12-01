@@ -11,6 +11,12 @@ const Section = db.Section;
 const SectionScoreCache = db.SectionScoreCache;
 const sequelize = db.sequelize;
 
+const SUBMISSION_CONFIG = {
+  ENABLE_LIMITS: true, // Toggle restrictions
+  MAX_SUBMISSIONS_BY_EMAIL: 2,
+  MAX_SUBMISSIONS_BY_PHONE: 2
+};
+
 /**
  * Start a new anonymous response session
  * returns { session_uuid }
@@ -18,10 +24,31 @@ const sequelize = db.sequelize;
 const startSession = async (req, res) => {
   try {
     const { ip_address, user_agent,
-
       fullName,
       email, phone, company
     } = req.body || {};
+
+    // ✅ CHECK SUBMISSION LIMITS
+    if (SUBMISSION_CONFIG.ENABLE_LIMITS) {
+      if (email) {
+        const emailCount = await Response.count({ where: { email } });
+        if (emailCount >= SUBMISSION_CONFIG.MAX_SUBMISSIONS_BY_EMAIL) {
+          return res.status(400).json({
+            message: `Submission limit reached for email (${SUBMISSION_CONFIG.MAX_SUBMISSIONS_BY_EMAIL} max).`
+          });
+        }
+      }
+
+      if (phone) {
+        const phoneCount = await Response.count({ where: { contact: phone } });
+        if (phoneCount >= SUBMISSION_CONFIG.MAX_SUBMISSIONS_BY_PHONE) {
+          return res.status(400).json({
+            message: `Submission limit reached for phone (${SUBMISSION_CONFIG.MAX_SUBMISSIONS_BY_PHONE} max).`
+          });
+        }
+      }
+    }
+
     const session_uuid = uuidv4();
     const resp = await Response.create({ session_uuid, ip_address, user_agent, full_name: fullName, email, contact: phone, company });
     return res.status(201).json({ session_uuid });
