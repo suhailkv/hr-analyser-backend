@@ -25,8 +25,8 @@ const bcrypt = require('bcrypt');
     // Clean limited sample data (careful in production)
     // create sample sections, questions and options if not exists
     const sectionsData = [
-      { title: 'Communication', description: 'Communication skills', sort_order: 1 },
-      { title: 'Leadership', description: 'Leadership capabilities', sort_order: 2 }
+      // { title: 'Communication', description: 'Communication skills', sort_order: 1 },
+      // { title: 'Leadership', description: 'Leadership capabilities', sort_order: 2 }
     ];
 
     for (const sData of sectionsData) {
