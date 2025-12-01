@@ -72,19 +72,25 @@ const listWithSections = async (req, res) => {
   try {
     const where = {};
     if (req.query.section_id) where.section_id = req.query.section_id;
-
+    where.deleted_at = null;
     const questions = await Question.findAll({
       where,
       include: [
         {
           model: db.Option,
-          required: false,
+          required: true,
+          where: {
+            is_active: 1
+          },
           order: [['sort_order', 'ASC']]
         },
         {
           model: db.Section,
           attributes: ['id', 'title'],
-          required: false
+          required: true,
+          where: {
+            deleted_at: null
+          }
         }
       ],
       order: [
@@ -325,10 +331,10 @@ const bulkCreateQuestions = async (req, res) => {
     console.error('❌ bulkCreateQuestions error:', error);
     try {
       await t.rollback();
-    } catch (e) {}
+    } catch (e) { }
     return res.status(500).json({ message: 'Server error', error: error.message });
   }
 };
 
 
-module.exports = { create, list, getOne, update, remove ,listWithSections,bulkCreateQuestions};
+module.exports = { create, list, getOne, update, remove, listWithSections, bulkCreateQuestions };

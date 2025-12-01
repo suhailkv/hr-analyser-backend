@@ -752,13 +752,13 @@ const updateSummaryFromReport = async (req, res) => {
   }
 };
 
-const getSummaryNew = async (req, res) => {
+const getSummaryNew = async (req, res, next, sessionUUID) => {
   try {
-    const { session_uuid } = req.params;
+    const { session_uuid } = req?.params || sessionUUID;
 
     // 1️⃣ Fetch response
     const resp = await Response.findOne({ where: { session_uuid } });
-    if (!resp) return res.status(404).json({ message: 'Session not found' });
+    if (!resp) return res ? res.status(404).json({ message: 'Session not found' }) : false;
 
     // 2️⃣ Try loading cached section scores (which now include strength/gap/recommendation)
     const cacheRows = await SectionScoreCache.findAll({
@@ -848,19 +848,54 @@ const getSummaryNew = async (req, res) => {
     const maxmScore = sectionRatings.reduce((sum, x) => sum + x.mxmScore, 0);
 
     // 7️⃣ Derive key insights
-    const sortedSections = [...sectionRatings].sort((a, b) => b.score - a.score);
+    // Logic:
+    // 1. Calculate percentage for each section to normalize scores.
+    // 2. Sort by percentage descending (Strongest to Weakest).
+    // 3. Strong Area: Highest score > 75% (Fallback: Highest overall)
+    // 4. Weak Area: Lowest score < 40% (Fallback: Lowest overall)
+    // 5. Needs Improvement: Lowest score > 40% (Fallback: Second lowest overall)
+
+    const INSIGHT_CONFIG = {
+      STRONG_THRESHOLD: 75,
+      WEAK_THRESHOLD: 40
+    };
+
+    const sortedSections = [...sectionRatings]
+      .map(s => ({
+        ...s,
+        percentage: s.mxmScore > 0 ? (s.score / s.mxmScore) * 100 : 0
+      }))
+      .sort((a, b) => b.percentage - a.percentage);
+
+    // Strong Area
+    let strongArea = sortedSections.find(s => s.percentage >= INSIGHT_CONFIG.STRONG_THRESHOLD);
+    if (!strongArea) strongArea = sortedSections[0]; // Fallback to highest
+
+    // Weak Area
+    // Find sections below weak threshold, sort ascending (lowest first)
+    const weakSections = sortedSections.filter(s => s.percentage <= INSIGHT_CONFIG.WEAK_THRESHOLD);
+    let weakArea = weakSections.length > 0 ? weakSections[weakSections.length - 1] : sortedSections[sortedSections.length - 1]; // Lowest percentage
+
+    // Needs Improvement
+    // Find sections ABOVE weak threshold but not necessarily strong.
+    // We want the one "just above" the weak threshold, i.e., the lowest scoring one that is > 40%.
+    const improvementCandidates = sortedSections.filter(s => s.percentage > INSIGHT_CONFIG.WEAK_THRESHOLD);
+    // improvementCandidates are already sorted desc. The last one is the lowest > 40%.
+    let needsImprovementArea = improvementCandidates.length > 0
+      ? improvementCandidates[improvementCandidates.length - 1]
+      : (sortedSections.length > 1 ? sortedSections[sortedSections.length - 2] : null); // Fallback: 2nd lowest
+
     const keyInsights = [
       {
-        name: `Strong Area: ${sortedSections[0]?.sectionName || 'N/A'}`,
+        name: `Strong Area: ${strongArea?.sectionName || 'N/A'}`,
         status: 'success'
       },
       {
-        name: `Weak Area: ${sortedSections[sortedSections.length - 1]?.sectionName || 'N/A'}`,
+        name: `Weak Area: ${weakArea?.sectionName || 'N/A'}`,
         status: 'danger'
       },
       {
-        name: `Needs Improvement: ${sortedSections[Math.floor(sortedSections.length / 2)]?.sectionName || 'N/A'
-          }`,
+        name: `Needs Improvement: ${needsImprovementArea?.sectionName || 'N/A'}`,
         status: 'warning'
       }
     ];
@@ -939,10 +974,10 @@ const getSummaryNew = async (req, res) => {
       }
     };
 
-    return res.json(report);
+    return res ? res.json(report) : report;
   } catch (err) {
     console.error('❌ Error in getSummaryNew:', err);
-    return res.status(500).json({ message: 'Server error', error: err.message });
+    return res ? res.status(500).json({ message: 'Server error', error: err.message }) : { message: 'Server error', error: err.message };
   }
 };
 

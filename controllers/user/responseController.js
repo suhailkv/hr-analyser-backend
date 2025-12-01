@@ -1,6 +1,7 @@
 const db = require('../../models');
 const { v4: uuidv4 } = require('uuid');
 const Sequelize = require('sequelize');
+const { getSummaryNew } = require('./scoreController');
 
 const Response = db.Response;
 const Answer = db.Answer;
@@ -16,13 +17,13 @@ const sequelize = db.sequelize;
  */
 const startSession = async (req, res) => {
   try {
-    const { ip_address  , user_agent , 
+    const { ip_address, user_agent,
 
       fullName,
-      email, phone,company
+      email, phone, company
     } = req.body || {};
     const session_uuid = uuidv4();
-    const resp = await Response.create({ session_uuid, ip_address, user_agent, full_name: fullName, email, contact: phone ,company });
+    const resp = await Response.create({ session_uuid, ip_address, user_agent, full_name: fullName, email, contact: phone, company });
     return res.status(201).json({ session_uuid });
   } catch (err) {
     console.error(err);
@@ -148,7 +149,7 @@ const submitAnswers = async (req, res) => {
     await resp.update({ completed_at: new Date() });
 
     // ✅ Fetch latest summary
-    const summary = await getSummary(session_uuid);
+    const summary = await getSummaryNew(null, null, null, { session_uuid });
     summary.session_uuid = session_uuid;
     return res.status(200).json({
       message: 'answers submitted successfully',
@@ -167,7 +168,7 @@ const getSummary = async (session_uuid) => {
 
     // 1️⃣ Fetch response
     const resp = await Response.findOne({ where: { session_uuid } });
-    if (!resp)  throw Error({ message: 'Session not found' });
+    if (!resp) throw Error({ message: 'Session not found' });
 
     // 2️⃣ Try loading cached section scores
     const cacheRows = await SectionScoreCache.findAll({

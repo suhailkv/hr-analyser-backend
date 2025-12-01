@@ -27,8 +27,8 @@ router.get('/assessment/questions', questionController.listWithSections);
 router.post('/response/:session_uuid/submit', responseController.submitAnswers);
 
 // Get summary
-router.get('/response/:session_uuid/summary', scoreController.getSummary);
-// router.get('/response/:session_uuid/summary', scoreController.getSummaryNew);
+router.get('/response/:session_uuid/summary', (req, res) => scoreController.getSummaryNew(req, res, null));
+// router.get('/response/:session_uuid/summary', scoreController.getSummary);
 router.get('/response/all-submissions', scoreController.getAllSubmissions);
 router.put('/response/:session_uuid/edit', scoreController.updateSummaryFromReport);
 
