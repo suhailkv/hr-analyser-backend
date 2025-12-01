@@ -6,6 +6,7 @@ const sectionController = require("../controllers/admin/sectionController");
 const questionController = require("../controllers/admin/questionController");
 const optionController = require("../controllers/admin/optionController");
 const scoreController = require("../controllers/user/scoreController");
+const adminController = require("../controllers/admin/admin.controller");
 const jwt = require("jsonwebtoken");
 
 const coverpageController = require("../controllers/gen/coverpageController"); // For uploads
@@ -63,6 +64,7 @@ router.delete("/options/:id", requireAdmin, optionController.remove);
 
 // admin submissions
 router.get("/submissions", requireAdmin, scoreController.getAllSubmissions);
+router.get("/submissions/:session_uuid/details", requireAdmin, adminController.getSessionDetails);
 router.post("/enquire/:uuid", sectionController.markAsEnquired);
 // Cover page - List existing uploaded images
 router.get(

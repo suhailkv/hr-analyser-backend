@@ -47,8 +47,8 @@ app.get('*', (req, res) => {
     console.log('Database connected.');
 
     if (process.env.NODE_ENV === 'development') {
-      await sequelize.sync({ alter: true });
-      console.log('Models synced (alter).');
+      // await sequelize.sync({ alter: true });
+      console.log('Models synced (alter) - SKIPPED to avoid "Too many keys" error.');
     }
 
     const PORT = process.env.PORT || 3000;
