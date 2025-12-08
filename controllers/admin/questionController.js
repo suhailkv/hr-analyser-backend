@@ -4,53 +4,54 @@ const Section = db.Section;
 const Option = db.Option;
 
 const create = async (req, res) => {
-  const t = await db.sequelize.transaction();
   try {
-    const { section_id, text, help_text, sort_order = 0, is_active = true, options = [] } = req.body;
-    const created_by = req.adminId || null;
+    const createdQuestion = await db.sequelize.transaction(async (t) => {
+      const { section_id, text, help_text, sort_order = 0, is_active = true, options = [] } = req.body;
+      const created_by = req.adminId || null;
 
-    // ✅ Validate section exists
-    const section = await Section.findByPk(section_id);
-    if (!section) {
-      await t.rollback();
-      return res.status(400).json({ message: 'invalid section_id' });
-    }
+      // ✅ Validate section exists
+      const section = await Section.findByPk(section_id, { transaction: t });
+      if (!section) {
+        throw new Error('invalid section_id'); // Throwing an error will cause the transaction to rollback
+      }
 
-    // ✅ Create question
-    const question = await Question.create(
-      { section_id, text, help_text, sort_order, is_active, created_by },
-      { transaction: t }
-    );
+      // ✅ Create question
+      const question = await Question.create(
+        { section_id, text, help_text, sort_order, is_active, created_by },
+        { transaction: t }
+      );
 
-    // ✅ If options array provided, create all options for this question
-    if (Array.isArray(options) && options.length > 0) {
-      const optionPayloads = options.map(opt => ({
-        question_id: question.id,
-        label: opt.label || null,
-        detail: opt.detail || null,
-        score: opt.score || 0,
-        gap: opt.gap || null,
-        strength: opt.strength || null,
-        recommendation: opt.recommendation || null,
-        sort_order: opt.sort_order || 0,
-        is_active: opt.is_active !== undefined ? opt.is_active : true,
-      }));
+      // ✅ If options array provided, create all options for this question
+      if (Array.isArray(options) && options.length > 0) {
+        const optionPayloads = options.map(opt => ({
+          question_id: question.id,
+          label: opt.label || null,
+          detail: opt.detail || null,
+          score: opt.score || 0,
+          gap: opt.gap || null,
+          strength: opt.strength || null,
+          recommendation: opt.recommendation || null,
+          sort_order: opt.sort_order || 0,
+          is_active: opt.is_active !== undefined ? opt.is_active : true,
+        }));
 
-      await db.Option.bulkCreate(optionPayloads, { transaction: t });
-    }
+        await db.Option.bulkCreate(optionPayloads, { transaction: t });
+      }
 
-    await t.commit();
-
-    // ✅ Return created question with its new options
-    const createdQuestion = await Question.findByPk(question.id, {
-      include: [db.Option],
+      // ✅ Return created question with its new options
+      return await Question.findByPk(question.id, {
+        include: [db.Option],
+        transaction: t,
+      });
     });
 
     return res.status(201).json(createdQuestion);
 
   } catch (err) {
     console.error(err);
-    await t.rollback();
+    if (err.message === 'invalid section_id') {
+      return res.status(400).json({ message: err.message });
+    }
     return res.status(500).json({ message: 'server error' });
   }
 };
@@ -60,6 +61,7 @@ const list = async (req, res) => {
   try {
     const where = {};
     if (req.query.section_id) where.section_id = req.query.section_id;
+    where.is_active = true;
     const questions = await Question.findAll({ where, order: [['sort_order', 'ASC'], ['id', 'ASC']], include: [Option] });
     return res.json(questions);
   } catch (err) {
@@ -72,7 +74,7 @@ const listWithSections = async (req, res) => {
   try {
     const where = {};
     if (req.query.section_id) where.section_id = req.query.section_id;
-    where.deleted_at = null;
+    where.is_active = true;
     const questions = await Question.findAll({
       where,
       include: [
@@ -236,27 +238,30 @@ const update = async (req, res) => {
 
 
 const remove = async (req, res) => {
-  const t = await db.sequelize.transaction();
   try {
-    const q = await Question.findByPk(req.params.id, { transaction: t });
-    if (!q) {
-      await t.rollback();
-      return res.status(404).json({ message: 'not found' });
-    }
+    await db.sequelize.transaction(async (t) => {
+      const q = await Question.findByPk(req.params.id, { transaction: t });
+      if (!q) {
+        // Throwing an error within the transaction callback will cause a rollback
+        throw new Error('Question not found');
+      }
 
-    // ✅ Cascade delete options (safeguard, though FK cascade will handle it)
-    await db.Option.destroy({
-      where: { question_id: q.id },
-      transaction: t
+      // ✅ Soft delete options
+      // await db.Option.update(
+      //   { deleted_at: new Date() },
+      //   { where: { question_id: q.id }, transaction: t }
+      // );
+
+      // ✅ Soft delete question
+      await q.update({ is_active: false }, { transaction: t });
     });
 
-    await q.destroy({ transaction: t });
-
-    await t.commit();
     return res.json({ message: 'deleted successfully' });
   } catch (err) {
+    if (err.message === 'Question not found') {
+      return res.status(404).json({ message: 'not found' });
+    }
     console.error('Error deleting question:', err);
-    await t.rollback();
     return res.status(500).json({ message: 'server error' });
   }
 };

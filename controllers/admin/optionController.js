@@ -54,7 +54,7 @@ const remove = async (req, res) => {
   try {
     const opt = await Option.findByPk(req.params.id);
     if (!opt) return res.status(404).json({ message: 'not found' });
-    await opt.destroy();
+    await opt.update({ is_active: false }); // Soft delete by setting is_active to false
     return res.json({ message: 'deleted' });
   } catch (err) {
     console.error(err);

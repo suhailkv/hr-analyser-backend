@@ -33,6 +33,9 @@ const list = async (req, res) => {
           required: false
         }
       ],
+      where: {
+        deleted_at: null
+      },
       group: ['Section.id'], // ensure proper grouping for aggregation
       order: [['sort_order', 'ASC'], ['id', 'ASC']]
     });
@@ -74,7 +77,8 @@ const remove = async (req, res) => {
   try {
     const section = await Section.findByPk(req.params.id);
     if (!section) return res.status(404).json({ message: 'not found' });
-    await section.destroy();
+    // Assuming 'is_active' is used for soft deletion, or a 'deletedAt' column exists
+    await section.update({ deleted_at: new Date() }); // Or await section.destroy() if model is configured with paranoid: true
     return res.json({ message: 'deleted' });
   } catch (err) {
     console.error(err);
@@ -82,10 +86,10 @@ const remove = async (req, res) => {
   }
 };
 
-const markAsEnquired =  async (req, res) => {
+const markAsEnquired = async (req, res) => {
   try {
     const uuid = req.params.uuid;
-    const response = await db.Response.findOne({ where: { session_uuid : uuid } });
+    const response = await db.Response.findOne({ where: { session_uuid: uuid } });
     if (!response) return res.status(404).json({ message: 'Response not found' });
     response.is_enquired = new Date();
     await response.save();
@@ -95,6 +99,6 @@ const markAsEnquired =  async (req, res) => {
     console.error(err);
     return res.status(500).json({ message: 'server error' });
   }
-  
+
 }
-module.exports = { create, list, getOne, update, remove ,markAsEnquired};
+module.exports = { create, list, getOne, update, remove, markAsEnquired };
