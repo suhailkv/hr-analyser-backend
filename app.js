@@ -28,8 +28,8 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.get('/health', (req, res) => res.json({ message: 'HR Analyzer API' }));
 
 // ✅ Mount routes
-app.use('/admin', adminRoutes);
-app.use('/user', userRoutes);
+app.use('api/admin', adminRoutes);
+app.use('api/user', userRoutes);
 
 // ✅ Serve frontend build files
 const frontendBuildPath = process.env.FRONTEND_BUILD_PATH || path.join(__dirname, '../frontend/build');
