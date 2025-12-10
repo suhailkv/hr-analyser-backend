@@ -903,15 +903,16 @@ const getSummaryNew = async (req, res, next, sessionUUID) => {
 
     const keyInsights = [
       {
-        name: `Strong Area: ${strongArea?.sectionName || 'N/A'}`,
+        name: `Strong Area: ${totalScore != 0 ? sortedSections[0]?.sectionName : 'N/A'}`,
         status: 'success'
       },
       {
-        name: `Weak Area: ${weakArea?.sectionName || 'N/A'}`,
+        name: `Weak Area: ${totalScore != maxmScore ? sortedSections[sortedSections.length - 1]?.sectionName : 'N/A'}`,
         status: 'danger'
       },
       {
-        name: `Needs Improvement: ${needsImprovementArea?.sectionName || 'N/A'}`,
+        name: `Needs Improvement: ${totalScore != maxmScore ? sortedSections[Math.floor(sortedSections.length / 2)]?.sectionName : 'N/A'
+          }`,
         status: 'warning'
       }
     ];
