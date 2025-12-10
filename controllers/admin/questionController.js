@@ -264,80 +264,93 @@ const remove = async (req, res) => {
     console.error('Error deleting question:', err);
     return res.status(500).json({ message: 'server error' });
   }
-};
-// bulk upload
+}
+// Bulk create questions with nested structure
 const bulkCreateQuestions = async (req, res) => {
   const t = await db.sequelize.transaction();
   try {
-    const questionsPayload = req.body;
+    const sections = req.body;
 
-    if (!Array.isArray(questionsPayload) || !questionsPayload.length) {
+    // Basic validation
+    if (!Array.isArray(sections) || sections.length === 0) {
       await t.rollback();
-      return res.status(400).json({ message: 'Invalid payload. Expected a non-empty array.' });
+      return res.status(400).json({ message: 'Invalid payload: Expected non-empty array of sections' });
     }
 
-    const createdQuestions = [];
+    const result = [];
 
-    for (const item of questionsPayload) {
-      const { question, section, options } = item;
+    for (const sectionData of sections) {
+      const { section: sectionTitle, questions } = sectionData;
 
-      if (!question || !section || !Array.isArray(options) || !options.length) {
-        await t.rollback();
-        return res.status(400).json({
-          message: 'Each question must have "question", "section", and non-empty "options" array.'
-        });
+      if (!sectionTitle) {
+        // Skip sections without titles or handle error
+        continue;
       }
 
-      // 1️⃣ Find or create the Section
-      let sectionRow
-      sectionRow = await Section.create(
-        { title: section, sort_order: 0 },
-        { transaction: t }
-      );
+      // 1. Create Section
+      const section = await Section.create({
+        title: sectionTitle,
+        sort_order: 0
+      }, { transaction: t });
 
-      // 2️⃣ Create the Question
-      const questionRow = await Question.create(
-        {
-          section_id: sectionRow.id,
-          text: question
-        },
-        { transaction: t }
-      );
+      const sectionResult = {
+        id: section.id,
+        section: section.title,
+        questions: []
+      };
 
-      // 3️⃣ Create associated Options
-      const optionInserts = options.map((opt) => ({
-        question_id: questionRow.id,
-        label: opt.name,
-        score: opt.score || 0,
-        gap: opt.gap || null,
-        strength: opt.strength || null,
-        recommendation: opt.recommendation || null
-      }));
+      if (Array.isArray(questions) && questions.length > 0) {
+        for (const qData of questions) {
+          const { question: qText, options } = qData;
 
-      await Option.bulkCreate(optionInserts, { transaction: t });
+          if (!qText) continue;
 
-      createdQuestions.push({
-        id: questionRow.id,
-        section: sectionRow.title,
-        question: questionRow.question,
-        options: optionInserts
-      });
+          // 2. Create Question
+          const question = await Question.create({
+            section_id: section.id,
+            text: qText,
+            is_active: true,
+            sort_order: 0
+          }, { transaction: t });
+
+          // 3. Create Options
+          let createdOptions = [];
+          if (Array.isArray(options) && options.length > 0) {
+            const optionPayloads = options.map(opt => ({
+              question_id: question.id,
+              label: opt.name,
+              score: opt.score || 0,
+              gap: opt.gap || null,
+              strength: opt.strength || null,
+              recommendation: opt.recommendation || null,
+              is_active: true,
+              sort_order: 0
+            }));
+
+            createdOptions = await Option.bulkCreate(optionPayloads, { transaction: t });
+          }
+
+          sectionResult.questions.push({
+            id: question.id,
+            question: question.text,
+            options: createdOptions
+          });
+        }
+      }
+      result.push(sectionResult);
     }
 
     await t.commit();
-
     return res.status(201).json({
-      message: 'Questions and options created successfully',
-      questions: createdQuestions
+      message: 'Bulk import successful',
+      data: result
     });
+
   } catch (error) {
-    console.error('❌ bulkCreateQuestions error:', error);
-    try {
-      await t.rollback();
-    } catch (e) { }
+    console.error('Bulk create error:', error);
+    try { await t.rollback(); } catch (e) { }
     return res.status(500).json({ message: 'Server error', error: error.message });
   }
 };
-
 
 module.exports = { create, list, getOne, update, remove, listWithSections, bulkCreateQuestions };
