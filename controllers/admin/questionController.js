@@ -289,16 +289,11 @@ const bulkCreateQuestions = async (req, res) => {
       }
 
       // 1️⃣ Find or create the Section
-      let sectionRow = await Section.findOne({ where: { title: section }, transaction: t });
-      if (sectionRow?.deleted_at) sectionRow.deleted_at = null;
-      if (sectionRow?.is_active) sectionRow.is_active = true;
-      if (sectionRow) await sectionRow.save();
-      if (!sectionRow) {
-        sectionRow = await Section.create(
-          { title: section, sort_order: 0 },
-          { transaction: t }
-        );
-      }
+      let sectionRow
+      sectionRow = await Section.create(
+        { title: section, sort_order: 0 },
+        { transaction: t }
+      );
 
       // 2️⃣ Create the Question
       const questionRow = await Question.create(
