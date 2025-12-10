@@ -30,7 +30,11 @@ const list = async (req, res) => {
         {
           model: db.Question,
           attributes: [], // don't include actual question data, just count
-          required: false
+          required: false,
+          where: {
+            deleted_at: null,
+            is_active: true
+          }
         }
       ],
       where: {

@@ -91,7 +91,8 @@ const listWithSections = async (req, res) => {
           attributes: ['id', 'title'],
           required: true,
           where: {
-            deleted_at: null
+            deleted_at: null,
+            is_active: true
           }
         }
       ],

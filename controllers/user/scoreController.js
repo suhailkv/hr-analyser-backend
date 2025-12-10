@@ -396,7 +396,13 @@ const getSummary = async (req, res) => {
 
         ],
         where: { response_id: resp.id },
-        include: [{ model: Question, attributes: [] }],
+        include: [{
+          model: Question, attributes: [],
+          where: {
+            deleted_at: null,
+            is_active: true
+          }
+        }],
         group: ['question.section_id'],
         raw: true
       });
@@ -442,6 +448,7 @@ const getSummary = async (req, res) => {
         SELECT q.section_id, SUM(o.score) AS max_score
         FROM hr_analyzer_questions q
         JOIN hr_analyzer_options o ON o.question_id = q.id
+        WHERE q.deleted_at IS NULL AND q.is_active = true 
         GROUP BY q.section_id
       `,
       { type: Sequelize.QueryTypes.SELECT }
@@ -466,15 +473,15 @@ const getSummary = async (req, res) => {
     const sortedSections = [...sectionRatings].sort((a, b) => b.score - a.score);
     const keyInsights = [
       {
-        name: `Strong Area: ${sortedSections[0]?.sectionName || 'N/A'}`,
+        name: `Strong Area: ${totalScore != 0 ? sortedSections[0]?.sectionName : 'N/A'}`,
         status: 'success'
       },
       {
-        name: `Weak Area: ${sortedSections[sortedSections.length - 1]?.sectionName || 'N/A'}`,
+        name: `Weak Area: ${totalScore != maxmScore ? sortedSections[sortedSections.length - 1]?.sectionName : 'N/A'}`,
         status: 'danger'
       },
       {
-        name: `Needs Improvement: ${sortedSections[Math.floor(sortedSections.length / 2)]?.sectionName || 'N/A'
+        name: `Needs Improvement: ${totalScore != maxmScore ? sortedSections[Math.floor(sortedSections.length / 2)]?.sectionName : 'N/A'
           }`,
         status: 'warning'
       }
@@ -777,7 +784,15 @@ const getSummaryNew = async (req, res, next, sessionUUID) => {
           [Sequelize.fn('SUM', Sequelize.col('option_score_snapshot')), 'section_score'],
         ],
         where: { response_id: resp.id },
-        include: [{ model: Question, attributes: [] }],
+        include: [
+          {
+            model: Question,
+            attributes: [],
+            where: {
+              deleted_at: null,
+              is_active: true
+            }
+          }],
         group: ['question.section_id'],
         raw: true
       });
@@ -826,6 +841,7 @@ const getSummaryNew = async (req, res, next, sessionUUID) => {
           SELECT q.section_id, MAX(o.score) as max_q_score 
           FROM hr_analyzer_questions q 
           JOIN hr_analyzer_options o ON o.question_id = q.id 
+          WHERE q.deleted_at IS NULL AND q.is_active = true
           GROUP BY q.id
         ) as subquery 
         GROUP BY section_id
