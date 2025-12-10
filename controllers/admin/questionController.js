@@ -96,6 +96,10 @@ const listWithSections = async (req, res) => {
           }
         }
       ],
+      where: {
+        deleted_at: null,
+        is_active: true
+      },
       order: [
         ['sort_order', 'ASC'],
         ['id', 'ASC'],
