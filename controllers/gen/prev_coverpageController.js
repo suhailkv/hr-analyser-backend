@@ -14,14 +14,14 @@ const listCoverImages = (req, res) => {
       .filter((filename) => filename.startsWith("frontImage"))
       .map((filename) => ({
         filename,
-        url: `${baseUrl}/uploads/coverpages/${filename}`,  // FULL URL
+        url: `${baseUrl}/api/uploads/coverpages/${filename}`,  // FULL URL
       }));
 
     const backImages = files
       .filter((filename) => filename.startsWith("backImage"))
       .map((filename) => ({
         filename,
-        url: `${baseUrl}/uploads/coverpages/${filename}`,  // FULL URL
+        url: `${baseUrl}/api/uploads/coverpages/${filename}`,  // FULL URL
       }));
 
     return res.status(200).json({ frontImages, backImages });

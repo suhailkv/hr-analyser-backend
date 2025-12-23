@@ -70,7 +70,7 @@ const uploadCoverImages = (req, res) => {
       originalname: file.originalname,
       mimetype: file.mimetype,
       size: file.size,
-      url: `${baseUrl}/uploads/coverpages/${file.filename}`,  // FULL URL for frontend
+      url: `${baseUrl}/api/uploads/coverpages/${file.filename}`,  // FULL URL for frontend
     };
   }
 
@@ -81,7 +81,7 @@ const uploadCoverImages = (req, res) => {
       originalname: file.originalname,
       mimetype: file.mimetype,
       size: file.size,
-      url: `${baseUrl}/uploads/coverpages/${file.filename}`,  // FULL URL for frontend
+      url: `${baseUrl}/api/uploads/coverpages/${file.filename}`,  // FULL URL for frontend
     };
   }
 
